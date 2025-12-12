@@ -1,30 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gesture Particles</title>
+
+<style>
+html,body{
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#050505;
+  font-family:monospace;
+}
+#ui{
+  position:absolute;
+  bottom:15px;
+  left:15px;
+  color:#00ffcc;
+  background:rgba(0,0,0,.6);
+  padding:10px 12px;
+  border-radius:8px;
+  font-size:14px;
+  z-index:10;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+✋ Move hand | 👌 Pinch | ✊ Change Shape<br>
+Shape: <span id="shape">Sphere</span>
+</div>
+
+<video id="input-video" style="display:none"></video>
+
+<!-- THREE -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<!-- MEDIAPIPE (VERSION LOCKED) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
+
 <script>
-/* ================= CONFIG ================= */
-const COUNT = 1500;
-const SHAPES = ['Sphere','Heart','Flower','Saturn','Fireworks'];
-let shapeIndex = 0;
-let currentShape = SHAPES[0];
-let cooldown = false;
+/* ========= CONFIG ========= */
+const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+const COUNT=isMobile?800:1400;
+const SHAPES=["Sphere","Heart","Flower","Saturn","Fireworks"];
 
-let hand = new THREE.Vector3();
-let pinch = 1;
+let shapeIndex=0;
+let hand=new THREE.Vector3();
+let pinch=1;
+let cooldown=false;
 
-/* ================= THREE ================= */
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x050505,0.03);
+/* ========= THREE ========= */
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x050505,0.04);
 
-const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,500);
-camera.position.z = 25;
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,300);
+camera.position.z=25;
 
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
-const geo = new THREE.BufferGeometry();
-const pos = new Float32Array(COUNT*3);
-const target = new Float32Array(COUNT*3);
-const col = new Float32Array(COUNT*3);
+const geo=new THREE.BufferGeometry();
+const pos=new Float32Array(COUNT*3);
+const target=new Float32Array(COUNT*3);
+const col=new Float32Array(COUNT*3);
 
 for(let i=0;i<COUNT;i++){
   pos[i*3]=(Math.random()-.5)*40;
@@ -35,31 +80,27 @@ for(let i=0;i<COUNT;i++){
   col[i*3+2]=1;
 }
 
-geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
+geo.setAttribute("color",new THREE.BufferAttribute(col,3));
 
-const mat = new THREE.PointsMaterial({
-  size:0.15,
+const mat=new THREE.PointsMaterial({
+  size:0.18,
   vertexColors:true,
   transparent:true,
   opacity:0.85
 });
 
-const points = new THREE.Points(geo,mat);
+const points=new THREE.Points(geo,mat);
 scene.add(points);
 
-/* ================= SHAPES ================= */
+/* ========= SHAPES ========= */
 function setShape(name){
-  currentShape = name;
-  document.getElementById('shape').textContent = name;
-
+  document.getElementById("shape").textContent=name;
   for(let i=0;i<COUNT;i++){
-    let x,y,z;
+    let x=0,y=0,z=0;
+    const t=i/COUNT*Math.PI*2;
 
-    const t = i/COUNT * Math.PI*2;
-    const r = Math.sqrt(Math.random());
-
-    if(name==='Sphere'){
+    if(name==="Sphere"){
       const a=Math.random()*Math.PI*2;
       const b=Math.acos(2*Math.random()-1);
       x=8*Math.sin(b)*Math.cos(a);
@@ -67,33 +108,32 @@ function setShape(name){
       z=8*Math.cos(b);
     }
 
-    if(name==='Heart'){
-      x=16*Math.pow(Math.sin(t),3)*0.5;
-      y=(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))*0.4;
-      z=(Math.random()-.5)*3;
+    if(name==="Heart"){
+      x=8*Math.pow(Math.sin(t),3);
+      y=(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))*0.3;
+      z=(Math.random()-.5)*2;
     }
 
-    if(name==='Flower'){
+    if(name==="Flower"){
       x=10*Math.cos(t)*Math.sin(5*t);
       y=10*Math.sin(t)*Math.sin(5*t);
-      z=(Math.random()-.5)*3;
+      z=0;
     }
 
-    if(name==='Saturn'){
-      const ring = i%2;
-      const rr = ring?10:5;
-      x=Math.cos(t)*rr;
-      y=Math.sin(t)*rr;
-      z=ring?(Math.random()-.5):0;
+    if(name==="Saturn"){
+      const r=i%2?10:5;
+      x=Math.cos(t)*r;
+      y=Math.sin(t)*r;
+      z=i%2?(Math.random()-.5)*2:0;
     }
 
-    if(name==='Fireworks'){
+    if(name==="Fireworks"){
       const a=Math.random()*Math.PI*2;
       const b=Math.random()*Math.PI;
-      const rr=Math.random()*10;
-      x=Math.sin(b)*Math.cos(a)*rr;
-      y=Math.sin(b)*Math.sin(a)*rr;
-      z=Math.cos(b)*rr;
+      const r=Math.random()*10;
+      x=Math.sin(b)*Math.cos(a)*r;
+      y=Math.sin(b)*Math.sin(a)*r;
+      z=Math.cos(b)*r;
     }
 
     target[i*3]=x;
@@ -101,35 +141,33 @@ function setShape(name){
     target[i*3+2]=z;
   }
 }
-setShape(currentShape);
+setShape(SHAPES[0]);
 
-/* ================= HAND TRACKING ================= */
-const video = document.getElementById('input-video');
-const hands = new Hands({
-  locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+/* ========= HAND TRACKING ========= */
+const video=document.getElementById("input-video");
+
+const hands=new Hands({
+  locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
 });
 
 hands.setOptions({
   maxNumHands:1,
-  modelComplexity:1,
+  modelComplexity:0,
   minDetectionConfidence:0.7,
   minTrackingConfidence:0.7
 });
 
 hands.onResults(res=>{
   if(!res.multiHandLandmarks) return;
-  const lm = res.multiHandLandmarks[0];
+  const lm=res.multiHandLandmarks[0];
+  const i=lm[8];
+  const t=lm[4];
 
-  const ix = lm[8];
-  const th = lm[4];
+  hand.x=(i.x-0.5)*30;
+  hand.y=-(i.y-0.5)*20;
+  pinch=Math.hypot(i.x-t.x,i.y-t.y);
 
-  hand.x=(ix.x-0.5)*30;
-  hand.y=-(ix.y-0.5)*20;
-  hand.z=0;
-
-  pinch = Math.hypot(ix.x-th.x, ix.y-th.y);
-
-  const fist =
+  const fist=
     lm[8].y>lm[6].y &&
     lm[12].y>lm[10].y &&
     lm[16].y>lm[14].y &&
@@ -139,36 +177,36 @@ hands.onResults(res=>{
     shapeIndex=(shapeIndex+1)%SHAPES.length;
     setShape(SHAPES[shapeIndex]);
     cooldown=true;
-    setTimeout(()=>cooldown=false,800);
+    setTimeout(()=>cooldown=false,900);
   }
 });
 
 new Camera(video,{
-  onFrame:async()=>await hands.send({image:video}),
-  width:640,
-  height:480
+  width:320,
+  height:240,
+  onFrame:async()=>await hands.send({image:video})
 }).start();
 
-/* ================= ANIMATE ================= */
+/* ========= ANIMATE ========= */
 function animate(){
   requestAnimationFrame(animate);
   const p=geo.attributes.position.array;
-
   for(let i=0;i<COUNT;i++){
-    const ix=i*3;
-    p[ix]+= (target[ix]+hand.x-p[ix])*0.02*(1/pinch);
-    p[ix+1]+= (target[ix+1]+hand.y-p[ix+1])*0.02*(1/pinch);
-    p[ix+2]+= (target[ix+2]-p[ix+2])*0.02;
+    const k=i*3;
+    p[k]+= (target[k]+hand.x-p[k])*0.02*(1/pinch);
+    p[k+1]+= (target[k+1]+hand.y-p[k+1])*0.02*(1/pinch);
+    p[k+2]+= (target[k+2]-p[k+2])*0.02;
   }
   geo.attributes.position.needsUpdate=true;
-  scene.rotation.y+=0.001;
   renderer.render(scene,camera);
 }
 animate();
 
-addEventListener('resize',()=>{
+addEventListener("resize",()=>{
   camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
 </script>
+</body>
+</html>
