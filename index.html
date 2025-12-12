@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Gesture Particles</title>
 
 <style>
@@ -24,27 +24,46 @@ html,body{
   font-size:14px;
   z-index:10;
 }
+#tap{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#000;
+  color:#00ffcc;
+  font-size:20px;
+  z-index:20;
+}
 </style>
 </head>
 
 <body>
+
+<div id="tap">👆 Tap anywhere to start</div>
 
 <div id="ui">
 ✋ Move hand | 👌 Pinch | ✊ Change Shape<br>
 Shape: <span id="shape">Sphere</span>
 </div>
 
-<video id="input-video" style="display:none"></video>
+<video
+  id="input-video"
+  autoplay
+  muted
+  playsinline
+  style="display:none">
+</video>
 
 <!-- THREE -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-<!-- MEDIAPIPE (VERSION LOCKED) -->
+<!-- MEDIAPIPE (LOCKED VERSION) -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
 
 <script>
-/* ========= CONFIG ========= */
+/* ================= CONFIG ================= */
 const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
 const COUNT=isMobile?800:1400;
 const SHAPES=["Sphere","Heart","Flower","Saturn","Fireworks"];
@@ -53,8 +72,9 @@ let shapeIndex=0;
 let hand=new THREE.Vector3();
 let pinch=1;
 let cooldown=false;
+let camStarted=false;
 
-/* ========= THREE ========= */
+/* ================= THREE ================= */
 const scene=new THREE.Scene();
 scene.fog=new THREE.FogExp2(0x050505,0.04);
 
@@ -75,9 +95,7 @@ for(let i=0;i<COUNT;i++){
   pos[i*3]=(Math.random()-.5)*40;
   pos[i*3+1]=(Math.random()-.5)*40;
   pos[i*3+2]=(Math.random()-.5)*40;
-  col[i*3]=0;
-  col[i*3+1]=1;
-  col[i*3+2]=1;
+  col[i*3]=0;col[i*3+1]=1;col[i*3+2]=1;
 }
 
 geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
@@ -90,10 +108,9 @@ const mat=new THREE.PointsMaterial({
   opacity:0.85
 });
 
-const points=new THREE.Points(geo,mat);
-scene.add(points);
+scene.add(new THREE.Points(geo,mat));
 
-/* ========= SHAPES ========= */
+/* ================= SHAPES ================= */
 function setShape(name){
   document.getElementById("shape").textContent=name;
   for(let i=0;i<COUNT;i++){
@@ -143,7 +160,7 @@ function setShape(name){
 }
 setShape(SHAPES[0]);
 
-/* ========= HAND TRACKING ========= */
+/* ================= HAND TRACKING ================= */
 const video=document.getElementById("input-video");
 
 const hands=new Hands({
@@ -159,9 +176,9 @@ hands.setOptions({
 
 hands.onResults(res=>{
   if(!res.multiHandLandmarks) return;
+
   const lm=res.multiHandLandmarks[0];
-  const i=lm[8];
-  const t=lm[4];
+  const i=lm[8],t=lm[4];
 
   hand.x=(i.x-0.5)*30;
   hand.y=-(i.y-0.5)*20;
@@ -181,22 +198,36 @@ hands.onResults(res=>{
   }
 });
 
-new Camera(video,{
-  width:320,
-  height:240,
-  onFrame:async()=>await hands.send({image:video})
-}).start();
+/* ================= START CAMERA ON TAP ================= */
+function startCamera(){
+  if(camStarted) return;
+  camStarted=true;
 
-/* ========= ANIMATE ========= */
+  document.getElementById("tap").style.display="none";
+
+  new Camera(video,{
+    width:320,
+    height:240,
+    facingMode:"user",
+    onFrame:async()=>await hands.send({image:video})
+  }).start();
+}
+
+document.body.addEventListener("click",startCamera);
+document.body.addEventListener("touchstart",startCamera);
+
+/* ================= ANIMATE ================= */
 function animate(){
   requestAnimationFrame(animate);
   const p=geo.attributes.position.array;
+
   for(let i=0;i<COUNT;i++){
     const k=i*3;
     p[k]+= (target[k]+hand.x-p[k])*0.02*(1/pinch);
     p[k+1]+= (target[k+1]+hand.y-p[k+1])*0.02*(1/pinch);
     p[k+2]+= (target[k+2]-p[k+2])*0.02;
   }
+
   geo.attributes.position.needsUpdate=true;
   renderer.render(scene,camera);
 }
