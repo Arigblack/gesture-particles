@@ -2,203 +2,222 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gesture Particles</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ultimate Neon Galaxy</title>
 
 <style>
 html,body{
-  margin:0;
-  padding:0;
-  overflow:hidden;
-  background:#050505;
+  margin:0;padding:0;overflow:hidden;
+  background:#02030a;
   font-family:monospace;
+  touch-action:none;
 }
 #ui{
-  position:absolute;
-  bottom:15px;
-  left:15px;
-  color:#00ffcc;
-  background:rgba(0,0,0,.6);
-  padding:10px 12px;
-  border-radius:8px;
-  font-size:14px;
-  z-index:10;
+  position:fixed;bottom:15px;left:15px;
+  color:#00ffee;background:rgba(0,0,0,.55);
+  padding:12px 14px;border-radius:10px;
+  font-size:14px;z-index:10;
+}
+#top{
+  position:fixed;top:10px;left:50%;
+  transform:translateX(-50%);
+  color:#0ff;font-size:13px;opacity:.9;
+}
+#score{
+  position:fixed;top:10px;right:15px;
+  color:#fff;font-size:14px;
+}
+#joy{
+  position:fixed;bottom:30px;right:30px;
+  width:120px;height:120px;border-radius:50%;
+  border:2px solid rgba(0,255,255,.3);
+}
+#stick{
+  position:absolute;left:40px;top:40px;
+  width:40px;height:40px;border-radius:50%;
+  background:#0ff;opacity:.85;
 }
 </style>
 </head>
 
 <body>
 
+<div id="top">🌌 Mode: Galaxy</div>
+<div id="score">Score: 0</div>
+
 <div id="ui">
-✋ Move hand | 👌 Pinch | ✊ Change Shape<br>
-Shape: <span id="shape">Sphere</span>
+🎮 Joystick = Move<br>
+👆 Tap = Explosion<br>
+👆👆 Double Tap = Mode<br>
+☄️ Long Hold = Meteor Rain<br>
+🌀 Mode = Vortex<br>
+🌈 3 Fingers = RGB Toggle
 </div>
 
-<video id="input-video" style="display:none"></video>
+<div id="joy"><div id="stick"></div></div>
 
-<!-- THREE -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-<!-- MEDIAPIPE (VERSION LOCKED) -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
-
 <script>
-/* ========= CONFIG ========= */
-const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
-const COUNT=isMobile?800:1400;
-const SHAPES=["Sphere","Heart","Flower","Saturn","Fireworks"];
+/* ===== CONFIG ===== */
+const COUNT=900;
+const MODES=["Galaxy","BlackHole","Warp","Vortex"];
+let modeIndex=0;
+let control={x:0,y:0};
+let rgb=true;
+let score=0;
 
-let shapeIndex=0;
-let hand=new THREE.Vector3();
-let pinch=1;
-let cooldown=false;
-
-/* ========= THREE ========= */
+/* ===== THREE ===== */
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0x050505,0.04);
+scene.fog=new THREE.FogExp2(0x02030a,0.05);
 
-const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,300);
-camera.position.z=25;
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,400);
+camera.position.z=30;
 
-const renderer=new THREE.WebGLRenderer({antialias:true});
+const renderer=new THREE.WebGLRenderer({antialias:false});
 renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(devicePixelRatio);
+renderer.setPixelRatio(1.2);
 document.body.appendChild(renderer.domElement);
 
+/* ===== PARTICLES ===== */
 const geo=new THREE.BufferGeometry();
 const pos=new Float32Array(COUNT*3);
-const target=new Float32Array(COUNT*3);
+const vel=new Float32Array(COUNT*3);
 const col=new Float32Array(COUNT*3);
 
 for(let i=0;i<COUNT;i++){
-  pos[i*3]=(Math.random()-.5)*40;
-  pos[i*3+1]=(Math.random()-.5)*40;
-  pos[i*3+2]=(Math.random()-.5)*40;
-  col[i*3]=0;
-  col[i*3+1]=1;
-  col[i*3+2]=1;
+  pos[i*3]=(Math.random()-.5)*60;
+  pos[i*3+1]=(Math.random()-.5)*60;
+  pos[i*3+2]=(Math.random()-.5)*60;
 }
 
 geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
 geo.setAttribute("color",new THREE.BufferAttribute(col,3));
 
 const mat=new THREE.PointsMaterial({
-  size:0.18,
+  size:0.22,
   vertexColors:true,
   transparent:true,
-  opacity:0.85
+  blending:THREE.AdditiveBlending,
+  depthWrite:false
 });
 
-const points=new THREE.Points(geo,mat);
-scene.add(points);
+scene.add(new THREE.Points(geo,mat));
 
-/* ========= SHAPES ========= */
-function setShape(name){
-  document.getElementById("shape").textContent=name;
-  for(let i=0;i<COUNT;i++){
-    let x=0,y=0,z=0;
-    const t=i/COUNT*Math.PI*2;
-
-    if(name==="Sphere"){
-      const a=Math.random()*Math.PI*2;
-      const b=Math.acos(2*Math.random()-1);
-      x=8*Math.sin(b)*Math.cos(a);
-      y=8*Math.sin(b)*Math.sin(a);
-      z=8*Math.cos(b);
-    }
-
-    if(name==="Heart"){
-      x=8*Math.pow(Math.sin(t),3);
-      y=(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))*0.3;
-      z=(Math.random()-.5)*2;
-    }
-
-    if(name==="Flower"){
-      x=10*Math.cos(t)*Math.sin(5*t);
-      y=10*Math.sin(t)*Math.sin(5*t);
-      z=0;
-    }
-
-    if(name==="Saturn"){
-      const r=i%2?10:5;
-      x=Math.cos(t)*r;
-      y=Math.sin(t)*r;
-      z=i%2?(Math.random()-.5)*2:0;
-    }
-
-    if(name==="Fireworks"){
-      const a=Math.random()*Math.PI*2;
-      const b=Math.random()*Math.PI;
-      const r=Math.random()*10;
-      x=Math.sin(b)*Math.cos(a)*r;
-      y=Math.sin(b)*Math.sin(a)*r;
-      z=Math.cos(b)*r;
-    }
-
-    target[i*3]=x;
-    target[i*3+1]=y;
-    target[i*3+2]=z;
-  }
+/* ===== UI ===== */
+function setMode(){
+  document.getElementById("top").textContent="🌌 Mode: "+MODES[modeIndex];
 }
-setShape(SHAPES[0]);
+setMode();
 
-/* ========= HAND TRACKING ========= */
-const video=document.getElementById("input-video");
+/* ===== JOYSTICK ===== */
+const joy=document.getElementById("joy");
+const stick=document.getElementById("stick");
+let drag=false;
 
-const hands=new Hands({
-  locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
+joy.addEventListener("touchstart",()=>drag=true);
+addEventListener("touchend",()=>{
+  drag=false;control.x=control.y=0;
+  stick.style.left="40px";stick.style.top="40px";
 });
 
-hands.setOptions({
-  maxNumHands:1,
-  modelComplexity:0,
-  minDetectionConfidence:0.7,
-  minTrackingConfidence:0.7
-});
+joy.addEventListener("touchmove",e=>{
+  if(!drag) return;
+  const r=joy.getBoundingClientRect();
+  const t=e.touches[0];
+  let x=t.clientX-r.left-60;
+  let y=t.clientY-r.top-60;
+  x=Math.max(-40,Math.min(40,x));
+  y=Math.max(-40,Math.min(40,y));
+  stick.style.left=(x+40)+"px";
+  stick.style.top=(y+40)+"px";
+  control.x=x*0.4;
+  control.y=-y*0.4;
+},{passive:false});
 
-hands.onResults(res=>{
-  if(!res.multiHandLandmarks) return;
-  const lm=res.multiHandLandmarks[0];
-  const i=lm[8];
-  const t=lm[4];
+/* ===== TOUCH ===== */
+let lastTap=0;
+let hold=false;
 
-  hand.x=(i.x-0.5)*30;
-  hand.y=-(i.y-0.5)*20;
-  pinch=Math.hypot(i.x-t.x,i.y-t.y);
+addEventListener("touchstart",e=>{
+  const now=Date.now();
+  if(e.touches.length===3) rgb=!rgb;
 
-  const fist=
-    lm[8].y>lm[6].y &&
-    lm[12].y>lm[10].y &&
-    lm[16].y>lm[14].y &&
-    lm[20].y>lm[18].y;
-
-  if(fist && !cooldown){
-    shapeIndex=(shapeIndex+1)%SHAPES.length;
-    setShape(SHAPES[shapeIndex]);
-    cooldown=true;
-    setTimeout(()=>cooldown=false,900);
+  if(now-lastTap<300){
+    modeIndex=(modeIndex+1)%MODES.length;
+    setMode();
   }
+  lastTap=now;
+  hold=true;
 });
 
-new Camera(video,{
-  width:320,
-  height:240,
-  onFrame:async()=>await hands.send({image:video})
-}).start();
+addEventListener("touchend",()=>hold=false);
 
-/* ========= ANIMATE ========= */
+/* ===== EFFECTS ===== */
+function explosion(){
+  for(let i=0;i<COUNT;i++){
+    vel[i*3]=(Math.random()-.5)*6;
+    vel[i*3+1]=(Math.random()-.5)*6;
+    vel[i*3+2]=(Math.random()-.5)*6;
+  }
+  score+=10;
+}
+
+document.body.addEventListener("click",explosion);
+
+/* ===== ANIMATE ===== */
+let t=0;
 function animate(){
   requestAnimationFrame(animate);
-  const p=geo.attributes.position.array;
+  t+=0.01;
+
   for(let i=0;i<COUNT;i++){
     const k=i*3;
-    p[k]+= (target[k]+hand.x-p[k])*0.02*(1/pinch);
-    p[k+1]+= (target[k+1]+hand.y-p[k+1])*0.02*(1/pinch);
-    p[k+2]+= (target[k+2]-p[k+2])*0.02;
+
+    if(MODES[modeIndex]==="Galaxy"){
+      pos[k]+= (control.x-pos[k])*0.02;
+      pos[k+1]+= (control.y-pos[k+1])*0.02;
+    }
+
+    if(MODES[modeIndex]==="BlackHole"){
+      pos[k]*=0.97;pos[k+1]*=0.97;pos[k+2]*=0.97;
+    }
+
+    if(MODES[modeIndex]==="Warp"){
+      pos[k+2]-=1.5;
+      if(pos[k+2]<-60) pos[k+2]=60;
+    }
+
+    if(MODES[modeIndex]==="Vortex"){
+      const a=Math.atan2(pos[k+1],pos[k])+0.05;
+      const r=Math.hypot(pos[k],pos[k+1]);
+      pos[k]=Math.cos(a)*r;
+      pos[k+1]=Math.sin(a)*r;
+    }
+
+    if(hold){
+      vel[k+1]-=0.3; // meteor rain
+    }
+
+    pos[k]+=vel[k]||0;
+    pos[k+1]+=vel[k+1]||0;
+    pos[k+2]+=vel[k+2]||0;
+
+    vel[k]*=0.9;vel[k+1]*=0.9;vel[k+2]*=0.9;
+
+    if(rgb){
+      col[k]=Math.sin(t+i*0.02)*0.5+0.5;
+      col[k+1]=Math.sin(t+i*0.015+2)*0.5+0.5;
+      col[k+2]=1;
+    }else{
+      col[k]=0;col[k+1]=1;col[k+2]=1;
+    }
   }
+
   geo.attributes.position.needsUpdate=true;
+  geo.attributes.color.needsUpdate=true;
   renderer.render(scene,camera);
+  document.getElementById("score").textContent="Score: "+score;
 }
 animate();
 
@@ -208,5 +227,6 @@ addEventListener("resize",()=>{
   renderer.setSize(innerWidth,innerHeight);
 });
 </script>
+
 </body>
 </html>
